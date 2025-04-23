@@ -1,0 +1,13 @@
+python lerobot/scripts/dps_train.py \
+--deepspeed="./ds_zero2.json" \
+--policy.type="qwen" \
+--policy.num_steps=100 \
+--dataset.root="Hephaistos" \
+--dataset.repo_id="Hephaistos" \
+--wandb.enable=true \
+--wandb.project="qwen-pi0-ft-simulated" \
+--job_name="0423-qwen-pi0-libero-all_exp-only" \
+--log_dir="logs_qwen_pi0" \
+--output_dir="0423_exponly_df100" \
+--steps=30_0000 \
+--dataset.image_transforms.enable=true

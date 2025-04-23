@@ -130,7 +130,7 @@ def train(cfg: TrainPipelineConfig):
     # Dataset setup
     dataset = MultiDatasetforDistTraining(cfg=cfg, image_transforms=image_transforms, 
                            seed=cfg.seed + int(os.environ.get("RANK", 0)), 
-                           data_mix="oxe_magic_soup_plus",
+                           data_mix="libero",
                         #    vla2root_json="vla2root_bak_single.json",
                            vla2root_json="vla2root.json"
                            )
@@ -151,6 +151,7 @@ def train(cfg: TrainPipelineConfig):
         device='cpu',
         ds_meta=dataset.meta,
         # weight_pt_path="/mnt/wangxiaofa/pi0_pretrain/model.pt"
+        weight_pt_path="/Data/lzl/qwen_pi0/0422/global_step7500/mp_rank_00_model_states.pt"
     )
     logger.info("Policy model created...")
 
@@ -380,5 +381,5 @@ def train(cfg: TrainPipelineConfig):
 
 if __name__ == "__main__":
     # os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    os.environ['WANDB_API_KEY'] = '7f1c1acfe477063902c617b0e8ef24d2b76ed447'
+    os.environ['WANDB_API_KEY'] = '9e1c3ac77856b8ebb5573c4e1e250c84aabfb904'
     train()

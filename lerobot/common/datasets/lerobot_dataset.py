@@ -1384,7 +1384,7 @@ class MultiDatasetforDistTraining(torch.utils.data.Dataset):
         parent_dir = self.cfg.dataset.parent_dir
         if self.cfg.dataset.parent_dir is None:
             parent_dir = default_parent_dir
-        print(parent_dir)
+        # print(parent_dir)
         # parent_dir = "/mnt/wangxiaofa/robot_dataset/lerobot-format/"
         
         if self.cfg.dataset.processor is not None:

@@ -40,6 +40,8 @@ class DatasetConfig:
     default_channel_size: int = 3
     processor: str = "/mnt/wangxiaofa/qwen_params/Qwen2.5-VL-7B-Instruct/"
     parent_dir: str = "/mnt/wangxiaofa/robot_dataset/lerobot-format/"
+    # processor: str = "/Data/lzl/qwen2.5_vl_7b/Qwen2.5-VL-7B-Instruct"
+    # parent_dir: str = "/Data/lerobot_data/simulated"
 
 
 @dataclass

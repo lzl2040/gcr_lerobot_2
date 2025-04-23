@@ -15,6 +15,7 @@ class QwenConfig(PreTrainedConfig):
     # qwen_path = "/datassd_1T/qwen25vl/Qwen2.5-VL-3B-Instruct/"
     # qwen_path = "/datassd_1T/qwen25vl/Qwen2.5-VL-7B-Instruct/"
     qwen_path = "/mnt/wangxiaofa/qwen_params/Qwen2.5-VL-7B-Instruct/"
+    # qwen_path = "/Data/lzl/qwen2.5_vl_7b/Qwen2.5-VL-7B-Instruct"
     # Input / output structure.
     n_obs_steps: int = 1
     chunk_size: int = 50
@@ -69,13 +70,16 @@ class QwenConfig(PreTrainedConfig):
     train_from_scratch: bool = True
 
     # Training presets
-    optimizer_lr: float = 2e-5
+    # optimizer_lr: float = 2e-5
+    optimizer_lr: float = 1e-4
     optimizer_betas: tuple[float, float] = (0.9, 0.95)
     optimizer_eps: float = 1e-8
     optimizer_weight_decay: float = 1e-10
 
-    scheduler_warmup_steps: int = 3_000
-    scheduler_decay_steps: int = -1
+    # scheduler_warmup_steps: int = 3_000
+    # scheduler_decay_steps: int = -1
+    scheduler_warmup_steps: int = 2_500
+    scheduler_decay_steps: int = 75_000
     scheduler_decay_lr: float = 2.5e-6
 
     # TODO: Add EMA
