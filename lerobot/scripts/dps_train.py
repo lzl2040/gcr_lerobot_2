@@ -113,6 +113,7 @@ def train(cfg: TrainPipelineConfig):
     image_transforms = (
         ImageTransforms(cfg.dataset.image_transforms)
     )
+    print(image_transforms)
     
     if int(os.environ.get('RANK', 0)) == 0:
         logger.info(pformat(cfg.to_dict()))

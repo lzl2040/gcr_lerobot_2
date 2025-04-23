@@ -175,7 +175,7 @@ class ImageTransformsConfig:
     max_num_transforms: int = 3
     # By default, transforms are applied in Torchvision's suggested order (shown below).
     # Set this to True to apply them in a random order.
-    random_order: bool = False
+    random_order: bool = True
     img_size: int = 224
     tfs: dict[str, ImageTransformConfig] = field(
         default_factory=lambda: {
@@ -266,6 +266,7 @@ class ImageTransforms(Transform):
                 n_subset=n_subset,
                 random_order=cfg.random_order,
             )
+        
 
     def forward(self, *inputs: Any) -> Any:
         return self.tf(*inputs)
