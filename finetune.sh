@@ -6,8 +6,8 @@ python lerobot/scripts/dps_train.py \
 --dataset.repo_id="Hephaistos" \
 --wandb.enable=true \
 --wandb.project="qwen-pi0-ft-simulated" \
---job_name="0423-qwen-pi0-libero-all_exp-only-1st" \
+--job_name="0502-qwen-pi0-libero-all_exp-only-random-order-false-1st" \
 --log_dir="/mnt/wangxiaofa/logs" \
---output_dir="/mnt/wangxiaofa/qwen-pi0-ft-simulated/0423_libero-all-exponly_df100" \
+--output_dir="/mnt/wangxiaofa/qwen-pi0-ft-simulated/0502_libero-all-exponly_df100-random-order-false" \
 --steps=30_0000 \
 --dataset.image_transforms.enable=true

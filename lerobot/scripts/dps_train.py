@@ -152,7 +152,7 @@ def train(cfg: TrainPipelineConfig):
         device='cpu',
         ds_meta=dataset.meta,
         # weight_pt_path="/mnt/wangxiaofa/pi0_pretrain/model.pt"
-        weight_pt_path="/mnt/wangxiaofa/original_qw/flow+06_0422_Prometheus_exponly_df100/global_step7500/mp_rank_00_model_states.pt"
+        weight_pt_path="/mnt/wangxiaofa/original_qw/flow+01_0428_lr1e4_Prometheus_exponly_df10/global_step15000/mp_rank_00_model_states.pt"
     )
     logger.info("Policy model created...")
 
