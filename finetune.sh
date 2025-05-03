@@ -1,3 +1,8 @@
+export NCCL_BLOCKING_WAIT=1
+export NCCL_ASYNC_ERROR_HANDLING=1
+export NCCL_DEBUG=INFO
+export NCCL_DEBUG_SUBSYS=ALL
+export NCCL_TIMEOUT=3600
 python lerobot/scripts/dps_train.py \
 --deepspeed="./ds_zero2.json" \
 --policy.type="qwen" \
