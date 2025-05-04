@@ -11,5 +11,5 @@ NCCL_TIMEOUT=3600 NCCL_BLOCKING_WAIT=1 python lerobot/scripts/dps_train.py \
 --log_dir="/mnt/wangxiaofa/logs" \
 --output_dir="/mnt/wangxiaofa/qwen-pi0-ft-simulated/0504_libero-all-exponly_df100-random-order-false" \
 --steps=30_0000 \
---save_freq 20000 \
+--save_freq=50000 \
 --dataset.image_transforms.enable=true
