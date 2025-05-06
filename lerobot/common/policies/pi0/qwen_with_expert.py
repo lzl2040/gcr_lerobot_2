@@ -130,6 +130,7 @@ class PaliGemmaWithExpertConfig(PretrainedConfig):
         gemma_expert_config: dict | None = None,
         freeze_vision_encoder: bool = True,
         train_expert_only: bool = True,
+        train_vl_final_layer_list: bool = True,
         attention_implementation: str = "eager",
         qwen25vl_config: dict | None = None,
         qwenexp_config: dict | None = None,
@@ -137,6 +138,7 @@ class PaliGemmaWithExpertConfig(PretrainedConfig):
     ):
         self.freeze_vision_encoder = freeze_vision_encoder
         self.train_expert_only = train_expert_only
+        self.train_vl_final_layer_list = train_vl_final_layer_list
         self.attention_implementation = attention_implementation
         
         if qwen25vl_config is None:
@@ -382,15 +384,31 @@ class PaliGemmaWithExpertModel(PreTrainedModel):
             self.qwen25vl.eval()
             for params in self.qwen25vl.parameters():
                 params.requires_grad = False
+        
+        if self.config.train_vl_final_layer_list:
+            # self.qwen25vl.model.train()
+            for params in self.qwen25vl.model.parameters():
+                params.requires_grad = False
+            
+            train_layers_id = list(range(-2, 0))
+            print(f"Train qwen25vl model final layer: {train_layers_id}")
+            for layer_id in train_layers_id:
+                for params in self.qwen25vl.model.layers[layer_id].parameters():
+                    params.requires_grad = True
+        else:
+            self.qwen25vl.model.eval()
+            print(f"Freeze qwen25vl language model")
+            for params in self.qwen25vl.model.parameters():
+                params.requires_grad = False
 
     def train(self, mode: bool = True):
         super().train(mode)
 
-        if self.config.freeze_vision_encoder:
-            self.paligemma.vision_tower.eval()
+        # if self.config.freeze_vision_encoder:
+        #     self.paligemma.vision_tower.eval()
 
-        if self.config.train_expert_only:
-            self.paligemma.eval()
+        # if self.config.train_expert_only:
+        #     self.paligemma.eval()
 
     def to_bfloat16_like_physical_intelligence(self):
         self.qwen25vl = self.qwen25vl.to(dtype=torch.bfloat16)

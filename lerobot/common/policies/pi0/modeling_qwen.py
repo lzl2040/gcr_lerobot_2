@@ -265,9 +265,9 @@ class QwenPolicy(PreTrainedPolicy):
         self.reset()
         if config.train_from_scratch:
             print(f"Training from scratch, loading qwen2.5 vl weights from {config.qwen_path}.")
-            self.model = QwenFlowMatching(config, init_load=True, init_path = config.qwen_path)
+            self.model = QwenFlowMatching(config, init_load=True, init_path = config.qwen_path).to(dtype=self.dtype)
         else:
-            self.model = QwenFlowMatching(config, init_load=False)
+            self.model = QwenFlowMatching(config, init_load=False).to(dtype=self.dtype)
         self.model.paligemma_with_expert.set_requires_grad()
         gc_kwargs = {"use_reentrant": False}
         self.model.paligemma_with_expert.qwen25vl.model.gradient_checkpointing = True
@@ -285,6 +285,60 @@ class QwenPolicy(PreTrainedPolicy):
 
     def get_optim_params(self) -> dict:
         return self.parameters()
+    
+
+    @torch.no_grad
+    def infer(self, batch: dict[str, Tensor], noise: Tensor | None = None):
+        self.eval()
+
+        if self.config.adapt_to_pi_aloha:
+            batch[OBS_ROBOT] = self._pi_aloha_decode_state(batch[OBS_ROBOT])
+
+        input_ids, attention_mask, pixel_values, \
+            image_grid_thw, pixel_values_videos, video_grid_thw, \
+            second_per_grid_ts = self.prepare_input(batch)
+
+        state = self.prepare_state(batch)
+        state = self.convert_to_dtype(state)
+        actions = self.model.sample_actions(
+            input_ids, attention_mask, pixel_values, 
+            image_grid_thw, pixel_values_videos, 
+            video_grid_thw, second_per_grid_ts, state, noise=noise,
+            dtype=self.dtype
+        )
+        
+        # Unpad actions
+        original_action_dim = self.config.action_feature.shape[0]
+        actions = actions[:, :, :original_action_dim]
+        if self.config.adapt_to_pi_aloha:
+            actions = self._pi_aloha_encode_actions(actions)
+
+        # actions = actions.transpose(0, 1)
+        # print(actions.shape)
+        return actions
+
+        # batch = self.normalize_inputs(batch)
+
+        # images, img_masks = self.prepare_images(batch)
+        # state = self.prepare_state(batch)
+        # lang_tokens, lang_masks = self.prepare_language(batch)
+
+        # actions = self.model.sample_actions(
+        #     images, img_masks, lang_tokens, lang_masks, state, noise=noise
+        # )
+
+        # # Unpad actions
+        # original_action_dim = self.config.action_feature.shape[0]
+        # actions = actions[:, :, :original_action_dim]
+
+        # actions = self.unnormalize_outputs({"action": actions})["action"]
+
+        # if self.config.adapt_to_pi_aloha:
+        #     actions = self._pi_aloha_encode_actions(actions)
+
+        # # actions = actions.transpose(0, 1)
+        # # print(actions.shape)
+        # return actions
 
     @torch.no_grad
     def select_action(self, batch: dict[str, Tensor], noise: Tensor | None = None) -> Tensor:
@@ -429,12 +483,31 @@ class QwenPolicy(PreTrainedPolicy):
             # If the image sequence is a list, it means we have a video
             # 
             if key == "observation.images.primary":
+                # for i in range(bsize):
+                #     visions[i]['video'] = img_seq[i]
+                #     video_length = len(img_seq[i])
+                #     if video_length > self.config.max_frame:
+                #         # Sample the video from the ending
+                #         visions[i]["video"] = img_seq[i][-self.config.max_frame:]
                 for i in range(bsize):
-                    visions[i]['video'] = img_seq[i]
-                    video_length = len(img_seq[i])
+                    if isinstance(img_seq[i], list):
+                        video = img_seq[i]
+                        video_length = len(video)
+                    elif isinstance(img_seq[i], Image.Image):
+                        video = [img_seq[i]]
+                        video_length = 1
+                    else:
+                        logging.warning(f"Unexpected type for observation.images.primary: {type(item[key])}, from {item['source']}")
+                    
                     if video_length > self.config.max_frame:
-                        # Sample the video from the ending
-                        visions[i]["video"] = img_seq[i][-self.config.max_frame:]
+                        visions[i]['video'] = video[-self.config.max_frame:]
+                    else:
+                        visions[i]['video'] = video
+                    
+                    # Resize frames in the video
+                    for j in range(len(visions[i]['video'])):
+                        visions[i]['video'][j] = visions[i]['video'][j].resize((112, 112))
+
             else:
                 for i in range(bsize):
                     visions[i]['image'].append(img_seq[i][0])
@@ -572,6 +645,10 @@ class QwenPolicy(PreTrainedPolicy):
             pixel_values_videos = pixel_values_videos.to(device=device, dtype=self.dtype)
         if video_grid_thw is not None:
             video_grid_thw = video_grid_thw.to(device=device, dtype=self.dtype)
+        # if input_ids is not None:
+        #     input_ids = input_ids.to(device=device, dtype=self.dtype)   
+        # if second_per_grid_ts is not None:
+        #     second_per_grid_ts = second_per_grid_ts.to(device=device, dtype=self.dtype)
         
         return input_ids, attention_mask, pixel_values, image_grid_thw, pixel_values_videos, video_grid_thw, second_per_grid_ts
         
@@ -652,7 +729,9 @@ class   QwenFlowMatching(nn.Module):
         paligemma_with_export_config = PaliGemmaWithExpertConfig(
             freeze_vision_encoder=self.config.freeze_vision_encoder,
             train_expert_only=self.config.train_expert_only,
+            train_vl_final_layer_list=self.config.train_vl_final_layer_list,
             attention_implementation=self.config.attention_implementation,
+            
         )
         self.paligemma_with_expert = PaliGemmaWithExpertModel(paligemma_with_export_config, init_load = init_load, init_path = init_path)
 
@@ -697,6 +776,10 @@ class   QwenFlowMatching(nn.Module):
         """
         input_ids = input_ids.to(device=self.paligemma_with_expert.qwen25vl.device)
         inputs_embeds = self.paligemma_with_expert.qwen25vl.model.embed_tokens(input_ids)
+        # 1 127, 1 127 3584
+        # print(f"input ids:{input_ids.shape} input_embeds:{inputs_embeds.shape}")
+        # 324 1176
+        # print(f"pixel values:{pixel_values.shape}")
         
         if pixel_values is not None:
             pixel_values = pixel_values.type(self.dtype)
@@ -852,7 +935,7 @@ class   QwenFlowMatching(nn.Module):
 
         if time is None:
             time = self.sample_time(actions.shape[0], actions.device)
-
+        
         time_expanded = time[:, None, None]
         x_t = time_expanded * noise + (1 - time_expanded) * actions
         u_t = noise - actions
@@ -865,6 +948,7 @@ class   QwenFlowMatching(nn.Module):
 
         # pad_masks = torch.cat([prefix_pad_masks, suffix_pad_masks], dim=1)
         att_masks = torch.cat([prefix_att_masks, suffix_att_masks], dim=1)
+        
         # print(f"init att masks: {att_masks.shape}")
 
         # att_2d_masks = make_att_2d_masks(pad_masks, att_masks)
@@ -890,7 +974,7 @@ class   QwenFlowMatching(nn.Module):
         losses = F.mse_loss(u_t, v_t, reduction="none")
         return losses
 
-    def sample_actions(self, images, img_masks, lang_tokens, lang_masks, state, noise=None) -> Tensor:
+    def sample_actions(self, input_ids, attention_mask, pixel_values, image_grid_thw, pixel_values_videos, video_grid_thw, second_per_grid_ts, state, noise=None, dtype=None) -> Tensor:
         """Do a full inference forward and compute the action (batch_size x num_steps x num_motors)"""
         bsize = state.shape[0]
         device = state.device
@@ -899,32 +983,44 @@ class   QwenFlowMatching(nn.Module):
             actions_shape = (bsize, self.config.n_action_steps, self.config.max_action_dim)
             noise = self.sample_noise(actions_shape, device)
 
-        prefix_embs, prefix_pad_masks, prefix_att_masks = self.embed_prefix(
-            images, img_masks, lang_tokens, lang_masks
+        prefix_embs, prefix_att_masks, prefix_pos_ids = self.embed_prefix(
+            input_ids, attention_mask, pixel_values, image_grid_thw, 
+            pixel_values_videos, video_grid_thw, second_per_grid_ts
         )
-        prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
-        prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
+        
+        # all equal to 1, casual attn
+        prefix_att_masks = prefix_att_masks.to(dtype=dtype)
+        prefix_pos_ids = prefix_pos_ids.to(dtype=dtype)
+        prefix_embs = prefix_embs.to(dtype=dtype)
+        # print(prefix_att_masks, prefix_pos_ids)
+
+        # prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
+        # prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
 
         # Compute image and language key value cache
         _, past_key_values = self.paligemma_with_expert.forward(
-            attention_mask=prefix_att_2d_masks,
-            position_ids=prefix_position_ids,
+            attention_mask=prefix_att_masks,
+            position_ids=prefix_pos_ids, # only use in qwen-vl
             past_key_values=None,
             inputs_embeds=[prefix_embs, None],
             use_cache=self.config.use_cache,
             fill_kv_cache=True,
         )
+        # print(f"pre {prefix_pos_ids}")
+        prefix_offsets = prefix_pos_ids.max() + 1
+        # [1, 127] [3, 1, 127] [1, 127, 3584]
+        # print(f"prefix attn mask:{prefix_att_masks.shape} prefix_pos_ids:{prefix_pos_ids.shape} prefix_embs:{prefix_embs.shape}")
 
         dt = -1.0 / self.config.num_steps
-        dt = torch.tensor(dt, dtype=torch.float32, device=device)
+        dt = torch.tensor(dt, dtype=dtype, device=device)
 
         x_t = noise
-        time = torch.tensor(1.0, dtype=torch.float32, device=device)
+        time = torch.tensor(1.0, dtype=dtype, device=device)
         while time >= -dt / 2:
             expanded_time = time.expand(bsize)
             v_t = self.denoise_step(
                 state,
-                prefix_pad_masks,
+                prefix_att_masks,
                 past_key_values,
                 x_t,
                 expanded_time,
@@ -933,41 +1029,40 @@ class   QwenFlowMatching(nn.Module):
             # Euler step
             x_t += dt * v_t
             time += dt
-        return x_t
+        return x_t.to(dtype=torch.float32)
 
     def denoise_step(
         self,
         state,
-        prefix_pad_masks,
+        prefix_att_masks,
         past_key_values,
         x_t,
         timestep,
     ):
         """Apply one denoising step of the noise `x_t` at a given timestep."""
         suffix_embs, suffix_pad_masks, suffix_att_masks = self.embed_suffix(state, x_t, timestep)
-
         suffix_len = suffix_pad_masks.shape[1]
-        batch_size = prefix_pad_masks.shape[0]
-        prefix_len = prefix_pad_masks.shape[1]
-        prefix_pad_2d_masks = prefix_pad_masks[:, None, :].expand(batch_size, suffix_len, prefix_len)
+        batch_size = prefix_att_masks.shape[0]
+        prefix_len = prefix_att_masks.shape[1]
+        # prefix_pad_2d_masks = prefix_att_masks[:, None, :].expand(batch_size, suffix_len, prefix_len)
 
-        suffix_att_2d_masks = make_att_2d_masks(suffix_pad_masks, suffix_att_masks)
-
-        full_att_2d_masks = torch.cat([prefix_pad_2d_masks, suffix_att_2d_masks], dim=2)
-
-        prefix_offsets = torch.sum(prefix_pad_masks, dim=-1)[:, None]
-        position_ids = prefix_offsets + torch.cumsum(suffix_pad_masks, dim=1) - 1
+        # suffix_att_2d_masks = make_att_2d_masks(prefix_att_masks, suffix_att_masks)
+        # 1 127, 1 51
+        # print(f"prefix att:{prefix_att_masks.shape} suffix mask:{suffix_att_masks.shape}")
+        att_masks = torch.cat([prefix_att_masks, suffix_att_masks], dim=1)
 
         outputs_embeds, _ = self.paligemma_with_expert.forward(
-            attention_mask=full_att_2d_masks,
-            position_ids=position_ids,
+            attention_mask=att_masks,
+            position_ids=None,
             past_key_values=past_key_values,
             inputs_embeds=[None, suffix_embs],
             use_cache=self.config.use_cache,
             fill_kv_cache=False,
         )
-        suffix_out = outputs_embeds[1]
+        suffix_out = outputs_embeds[0]
+        # print(suffix_out.shape) # 1 51 1536
         suffix_out = suffix_out[:, -self.config.n_action_steps :]
-        suffix_out = suffix_out.to(dtype=torch.float32)
+        # suffix_out = suffix_out.to(dtype=torch.float32)
         v_t = self.action_out_proj(suffix_out)
+        # v_t = v_t.to(dtype=torch.float32)
         return v_t

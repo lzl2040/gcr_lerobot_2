@@ -152,7 +152,7 @@ def train(cfg: TrainPipelineConfig):
         device='cpu',
         ds_meta=dataset.meta,
         # weight_pt_path="/mnt/wangxiaofa/pi0_pretrain/model.pt"
-        weight_pt_path="/mnt/wangxiaofa/original_qw/flow+01_0428_lr1e4_Prometheus_exponly_df10/global_step15000/mp_rank_00_model_states.pt"
+        weight_pt_path="/mnt/wangxiaofa/original_qw/flow+01_0428_lr1e4_Prometheus_exponly_df10/global_step20000/mp_rank_00_model_states.pt"
     )
     logger.info("Policy model created...")
 
@@ -280,6 +280,18 @@ def train(cfg: TrainPipelineConfig):
         
         start_time = time.perf_counter()
         batch = next(dl_iter)
+        keys = batch.keys()
+        # print(batch["observation.images.primary"].shape)
+        # torch.Size([1, 50, 32]) torch.Size([1, 32])
+        # print(batch["action"].shape, batch["observation.state"].shape)
+        # for key in keys:
+        #     print(f"Value type for key {key}: {type(batch[key])}")
+        #     if isinstance(batch[key], torch.Tensor):
+        #         print(f"Tensor shape: {batch[key].shape}")
+            
+        #     if isinstance(batch[key], list):
+        #         print(f"List elements: {type(batch[key][0])}")
+        #         print(f"List actual value: {batch[key]}")
         dataloading_time = time.perf_counter() - start_time
         dataloading_s += dataloading_time
         

@@ -57,21 +57,23 @@ class QwenConfig(PreTrainedConfig):
     proj_width: int = 1536
 
     # Decoding
-    num_steps: int = 100
+    num_steps: int = 10
 
     # Attention utils
     use_cache: bool = True
     attention_implementation: str = "fa2"  # or eager, flex
 
     # Finetuning settings
+    # 1550945834(freeze_vision and vl final), 2772493354(train vision), 3005551146(train vision and vl final)
     freeze_vision_encoder: bool = True
     train_expert_only: bool = True
     train_state_proj: bool = True
     train_from_scratch: bool = True
+    train_vl_final_layer_list: bool = True
 
     # Training presets
     # optimizer_lr: float = 2e-5
-    optimizer_lr: float = 1e-4
+    optimizer_lr: float = 2e-5
     optimizer_betas: tuple[float, float] = (0.9, 0.95)
     optimizer_eps: float = 1e-8
     optimizer_weight_decay: float = 1e-10
